@@ -16,11 +16,13 @@ The validation process is based on the DSS-Framework (https://github.com/esig/ds
 The project can be build easily using Netbeans IDE (https://netbeans.org).
 
 ###Examples:
-Validate one Document using default policy and an empty trust-store (the validation result will be invalid)
+Validate one Document using default policy and an empty trust-store (the validation result will be invalid):
+
 <b>java -jar validator-cli-1.0-r{revision}.jar --file Document1.pdf</b>
 
-Validate multiple Documents using own policy and trust-store from directory
-<b>java -jar validator-cli-1.0-r{revision}.jar --file <path to directory containing PDFs> --certs <path to directory containing DER-Encoded certificates> --policy <path to policy-xml file></b>
+Validate multiple Documents using own policy and trust-store from directory and database:
+
+<b>java -jar validator-cli-1.0-r{revision}.jar --file <path to directory containing PDFs> --certs <path to directory containing DER-Encoded certificates> --policy <path to policy-xml file> --database</b>
 
 Arguments:
 <pre>
