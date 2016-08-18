@@ -13,16 +13,16 @@ The following parameters can be modified for single or multiple PDF documents:
 The validation process is based on the DSS-Framework (https://github.com/esig/dss).
 
 ## Validator usage:
-The project can be build easily using Netbeans IDE (https://netbeans.org).
+This Netbeans project can be build easily using Maven.
 
 ###Examples:
 Validate one document using default policy and an empty trust-store (the validation result will be invalid):
 
-<b>java -jar validator-cli-1.0-r{revision}.jar --file Document1.pdf</b>
+<b>java -jar validator-cli-1.0-r&lt;revision&gt;.jar --file Document1.pdf</b>
 
 Validate multiple documents using own policy and trust-store from directory and database:
 
-<b>java -jar validator-cli-1.0-r{revision}.jar --file <path to directory containing PDFs> --certs <path to directory containing DER-Encoded certificates> --policy <path to policy-xml file> --database</b>
+<b>java -jar validator-cli-1.0-r&lt;revision&gt;.jar --file &lt;path to directory containing PDFs&gt; --certs &lt;path to directory containing DER-Encoded certificates&gt; --policy &lt;path to policy-xml file&gt; --database</b>
 
 Arguments:
 <pre>
@@ -30,7 +30,7 @@ Arguments:
 
 -db,--database Certificates are loaded from the database specified in db.config.properties
 
--f,--file <PDF-FILE> The PDF file to validate. If a directory is provided, the application will search for documents and validate them.
+-f,--file <PDF-FILE> The PDF file to validate. If a directory is provided, the application will search for documents and validate them. This argument is mandatory.
 
 -h,--help Shows this help dialog
 
