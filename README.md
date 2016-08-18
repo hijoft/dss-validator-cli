@@ -1,5 +1,5 @@
 # dss-validator-cli
-Command line interface for playing around with the DSS-Framework PDF validator settings.
+Command line interface for playing around with the DSS-Framework PDF Signature Validator settings.
 
 The following parameters can be modified for single or multiple PDF documents:
 <ul>
@@ -8,10 +8,21 @@ The following parameters can be modified for single or multiple PDF documents:
 <li>Build trust-store from DER encoded certificate files stored in a directory and/or database</li>
 </ul>
 
+
 ### DSS-Framework
 The validation process is based on the DSS-Framework (https://github.com/esig/dss).
 
 ## Validator usage:
+The project can be build easily using Netbeans IDE (https://netbeans.org).
+
+###Examples:
+Validate one Document using default policy and an empty trust-store (the validation result will be invalid)
+<b>java -jar validator-cli-1.0-r{revision}.jar --file Document1.pdf</b>
+
+Validate multiple Documents using own policy and trust-store from directory
+<b>java -jar validator-cli-1.0-r{revision}.jar --file <path to directory containing PDFs> --certs <path to directory containing DER-Encoded certificates> --policy <path to policy-xml file></b>
+
+Arguments:
 <pre>
 -c,--certs <DIRECTORY> directory containing certificates for validation. If no certificates are provided,no certificate is used for validation.
 
