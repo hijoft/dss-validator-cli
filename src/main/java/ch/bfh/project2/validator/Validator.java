@@ -25,14 +25,19 @@ import eu.europa.esig.dss.DSSDocument;
 import eu.europa.esig.dss.DSSUtils;
 import eu.europa.esig.dss.FileDocument;
 import eu.europa.esig.dss.client.crl.OnlineCRLSource;
+import eu.europa.esig.dss.client.http.DataLoader;
+import eu.europa.esig.dss.client.http.commons.CommonsDataLoader;
 import eu.europa.esig.dss.client.ocsp.OnlineOCSPSource;
 import eu.europa.esig.dss.tsl.ServiceInfo;
 import eu.europa.esig.dss.tsl.TrustedListsCertificateSource;
+import eu.europa.esig.dss.tsl.service.TSLRepository;
+import eu.europa.esig.dss.tsl.service.TSLValidationJob;
 import eu.europa.esig.dss.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.SignedDocumentValidator;
 import eu.europa.esig.dss.validation.reports.Reports;
 import eu.europa.esig.dss.x509.CertificateToken;
 import eu.europa.esig.dss.x509.CommonTrustedCertificateSource;
+import eu.europa.esig.dss.x509.KeyStoreCertificateSource;
 import eu.europa.esig.dss.x509.crl.CRLSource;
 import eu.europa.esig.dss.x509.ocsp.OCSPSource;
 import java.io.ByteArrayInputStream;
@@ -47,8 +52,8 @@ import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Properties;
 import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.apache.commons.cli.CommandLine;
 import org.apache.commons.cli.CommandLineParser;
 import org.apache.commons.cli.DefaultParser;
@@ -59,6 +64,8 @@ import org.apache.commons.cli.Option;
 import org.apache.commons.cli.Options;
 import org.apache.commons.cli.ParseException;
 import org.apache.commons.io.FilenameUtils;
+import org.slf4j.LoggerFactory;
+import org.slf4j.Logger;
 
 public class Validator {
 
@@ -68,7 +75,7 @@ public class Validator {
 
     private static final String DEFAULTPOLICY = "policy/constraint_original.xml";
 
-    private static final Logger LOGGER = Logger.getLogger(Validator.class.getName());
+    private static final Logger LOGGER = LoggerFactory.getLogger(Validator.class);
 
     public static void main(String args[]) {
 
@@ -82,17 +89,18 @@ public class Validator {
         options.addOption(Option.builder(CLIArgs.RFORMAT.shortArg()).longOpt(CLIArgs.RFORMAT.longArg()).argName("ATTRIBUTE").hasArg().desc("Report format. Multiple formats must be provided comma-separated without whitespace. Possible attributes: " + REPORT_FORMAT_STANDARD + " (default), " + REPORT_FORMAT_DETAIL + ", " + REPORT_FORMAT_DIAGNOSTIC + ".").build());
         options.addOption(Option.builder(CLIArgs.RDEST.shortArg()).longOpt(CLIArgs.RDEST.longArg()).argName("DIRECTORY").hasArg().desc("Destination for output file. If not defined, the output directory containing the PDF file is used.").build());
         options.addOption(Option.builder(CLIArgs.DB.shortArg()).longOpt(CLIArgs.DB.longArg()).desc("Certificates are loaded from the database specified in db.config.properties").build());
+        options.addOption(Option.builder(CLIArgs.LOTL.shortArg()).longOpt(CLIArgs.LOTL.longArg()).desc("Certificates are loaded from the LOTL specified in tsp.config.properties").build());
 
         CommandLine cliCmd;
         try {
             cliCmd = cliParser.parse(options, args);
         } catch (ParseException pe) {
             if (pe instanceof MissingOptionException) {
-                LOGGER.log(Level.WARNING, "Missing option: {0}", pe.getMessage());
+                LOGGER.warn("Missing option: {}", pe.getMessage());
             } else if (pe instanceof MissingArgumentException) {
-                LOGGER.log(Level.WARNING, "Missing argument for option: {0}", pe.getMessage());
+                LOGGER.warn("Missing argument for option: {}", pe.getMessage());
             } else {
-                LOGGER.log(Level.SEVERE, pe.getMessage());
+                LOGGER.error(pe.getMessage());
             }
             new HelpFormatter().printHelp("Validator", options);
             return;
@@ -107,10 +115,10 @@ public class Validator {
         String destinationPath;
         File pdfFile = new File(handleHomePath(cliCmd.getOptionValue(CLIArgs.FILE.shortArg())));
         if (!pdfFile.exists()) {
-            LOGGER.log(Level.WARNING, "{0}: PDF file not found: {1}", new Object[]{CLIArgs.FILE.toString(), pdfFile.getPath()});
+            LOGGER.warn("{}: PDF file not found: {}", new Object[]{CLIArgs.FILE.toString(), pdfFile.getPath()});
             return;
         } else if (pdfFile.isDirectory()) {
-            LOGGER.log(Level.INFO, "{0}: Directory found. Searching for documents in {1}", new Object[]{CLIArgs.FILE.toString(), pdfFile.getPath()});
+            LOGGER.info("{}: Directory found. Searching for documents in {}", new Object[]{CLIArgs.FILE.toString(), pdfFile.getPath()});
             destinationPath = pdfFile.getAbsolutePath();
             buildPDFList(pdfFiles, pdfFile);
         } else {
@@ -122,14 +130,14 @@ public class Validator {
         if (cliCmd.hasOption(CLIArgs.RDEST.shortArg())) {
             File destDirectory = new File(handleHomePath(cliCmd.getOptionValue(CLIArgs.RDEST.shortArg())));
             if (destDirectory.exists() && !destDirectory.isDirectory()) {
-                LOGGER.log(Level.WARNING, "{0}: No valid directory given as argument: {1}", new Object[]{CLIArgs.RDEST.toString(), destDirectory.getPath()});
+                LOGGER.warn("{}: No valid directory given as argument: {}", new Object[]{CLIArgs.RDEST.toString(), destDirectory.getPath()});
                 return;
             }
             if (!destDirectory.exists()) {
                 try {
                     destDirectory.mkdirs();
                 } catch (SecurityException se) {
-                    LOGGER.log(Level.SEVERE, "{0}: Cannot create destination directories. {1}", new Object[]{CLIArgs.RDEST.toString(), se.getMessage()});
+                    LOGGER.error("{}: Cannot create destination directories. {}", new Object[]{CLIArgs.RDEST.toString(), se.getMessage()});
                     return;
                 }
             }
@@ -137,16 +145,16 @@ public class Validator {
         }
 
         String defaultPolicy = Validator.class.getClassLoader().getResource(DEFAULTPOLICY).getPath();
-        File policyFile = new File(defaultPolicy);
+        File policyFile = new File(defaultPolicy); //use policy of dss-framework as default
         //Check custom policy
         if (cliCmd.hasOption(CLIArgs.POLICY.shortArg())) {
             policyFile = new File(handleHomePath(cliCmd.getOptionValue(CLIArgs.POLICY.shortArg())));
             if (!policyFile.exists() || policyFile.isDirectory()) {
-                LOGGER.log(Level.SEVERE, "{0}: Policy file not found: {1}", new Object[]{CLIArgs.POLICY.toString(), policyFile.getPath()});
+                LOGGER.error("{}: Policy file not found: {}", new Object[]{CLIArgs.POLICY.toString(), policyFile.getPath()});
                 return;            
             }         
         }
-        LOGGER.log(Level.INFO, "Using Policy: {0}", policyFile.getPath());
+        LOGGER.info("Using Policy: {}", (policyFile !=null ? policyFile.getPath() : "default"));
 
         List<String> reportFormats = new ArrayList();
         //Check report format
@@ -160,7 +168,7 @@ public class Validator {
                 }
             }
             if (reportFormats.isEmpty()) {
-                LOGGER.log(Level.WARNING, "{0}: No valid report format given as argument: {1}", new Object[]{CLIArgs.RFORMAT.toString(), format});
+                LOGGER.warn("{}: No valid report format given as argument: {}", new Object[]{CLIArgs.RFORMAT.toString(), format});
                 return;
             }
         } else {
@@ -168,12 +176,12 @@ public class Validator {
             reportFormats.add(REPORT_FORMAT_STANDARD);
         }
 
-        CommonTrustedCertificateSource certSource = null;
+        TrustedListsCertificateSource certSource = null;
         if (cliCmd.hasOption(CLIArgs.DB.shortArg())) {
             try {
                 certSource = new SQLDatabaseTrustedCertificateSource();
             } catch (InitializationException ex) {
-                LOGGER.log(Level.SEVERE, null, ex);
+                LOGGER.error(null, ex);
                 return;
             }
         }
@@ -185,7 +193,7 @@ public class Validator {
         if (cliCmd.hasOption(CLIArgs.CERTS.shortArg())) {
             File certDirectory = new File(handleHomePath(cliCmd.getOptionValue(CLIArgs.CERTS.shortArg())));
             if (!certDirectory.exists() || !certDirectory.isDirectory()) {
-                LOGGER.log(Level.WARNING, "{0}: No valid directory given as argument: {1}", new Object[]{CLIArgs.CERTS.toString(), certDirectory.getPath()});
+                LOGGER.warn("{}: No valid directory given as argument: {}", new Object[]{CLIArgs.CERTS.toString(), certDirectory.getPath()});
                 return;
             }
             //Load all certificates in folder to trusted cert store
@@ -193,12 +201,24 @@ public class Validator {
                 CertificateFactory cf = CertificateFactory.getInstance("X.509");
                 buildTrustList(certSource, cf, certDirectory);
             } catch (CertificateException ce) {
-                LOGGER.log(Level.SEVERE, ce.getMessage());
+                LOGGER.error(ce.getMessage());
                 return;
             }
         }
-        LOGGER.log(Level.INFO, "Found {0} certificates", certSource.getNumberOfTrustedCertificates());
-        LOGGER.log(Level.INFO, "Found {0} files", pdfFiles.size());
+        
+        
+        if (cliCmd.hasOption(CLIArgs.LOTL.shortArg())) {
+            try {
+                //Load certificates from TSL
+                loadFromTSL(certSource);
+            } catch (IOException ex) {
+                LOGGER.error("Could not load tsp.config.properties: {}", ex.getMessage());
+                return;
+            }
+        }
+        
+        LOGGER.info("Found {} certificates", certSource.getNumberOfTrustedCertificates());
+        LOGGER.info("Found {} documents", pdfFiles.size());
 
         for (File pdf : pdfFiles) {
             //Load pdf
@@ -228,10 +248,10 @@ public class Validator {
                     saveReport(new ByteArrayInputStream(reports.getXmlDiagnosticData().getBytes("UTF-8")), getReportSavePath(destinationPath, REPORT_FORMAT_DIAGNOSTIC, policyFile.getName(), pdf.getName()));
                 }
             } catch (UnsupportedEncodingException ex) {
-                    LOGGER.log(Level.SEVERE, null, ex);
+                    LOGGER.warn(null, ex);
             }
         }
-        LOGGER.log(Level.INFO, "Finished");
+        LOGGER.info("Finished");
         System.exit(0);
     }
 
@@ -246,15 +266,15 @@ public class Validator {
     private static void saveReport(InputStream is, String path) {
         try {
             DSSUtils.saveToFile(is, path);
-            LOGGER.log(Level.INFO, "Created Report: {0}", path);
+            LOGGER.info("Created Report: {}", path);
         } catch (IOException ex) {
-            LOGGER.log(Level.SEVERE, null, ex);
+            LOGGER.error(null, ex);
         } finally {
             if (is != null) {
                 try {
                     is.close();
                 } catch (IOException ex) {
-                    LOGGER.log(Level.SEVERE, null, ex);
+                    LOGGER.error(null, ex);
                 }
             }
         }
@@ -271,13 +291,13 @@ public class Validator {
                     X509Certificate x509Cert = (X509Certificate) cf.generateCertificate(new FileInputStream(file.getPath()));
                     tsl.addCertificate(new CertificateToken(x509Cert), new ServiceInfo());
                 } catch (CertificateException | FileNotFoundException ce) {
-                    LOGGER.log(Level.SEVERE, null, ce);
+                    LOGGER.error(null, ce);
                 } finally {
                     if (inStream != null) {
                         try {
                             inStream.close();
                         } catch (IOException ex) {
-                            LOGGER.log(Level.SEVERE, null, ex);
+                            LOGGER.error(null, ex);
                         }
                     }
                 }
@@ -295,6 +315,36 @@ public class Validator {
                 pdfList.add(file);
             }
         }
+    }
+    
+    private static void loadFromTSL(TrustedListsCertificateSource certSource) throws IOException{
+        Properties properties = new Properties();
+        InputStream is = Validator.class.getClassLoader().getResourceAsStream("config/tsp.config.properties");
+        properties.load(is);
+        
+        TSLRepository tslRepository = new TSLRepository();
+        tslRepository.setAllowExpiredTSLs(false);
+        tslRepository.setAllowIndeterminateSignatures(false);
+        tslRepository.setAllowInvalidSignatures(false);
+        tslRepository.setTrustedListsCertificateSource(certSource);
+        
+        DataLoader dataloader = new CommonsDataLoader();
+        ClassLoader loader = Validator.class.getClassLoader();
+        KeyStoreCertificateSource keyStore = new KeyStoreCertificateSource(new File(loader.getResource(properties.getProperty("dss.keystore.filename")).getPath()), properties.getProperty("dss.keystore.type"), properties.getProperty("dss.keystore.password"));
+        
+        TSLValidationJob tslValidationJob = new TSLValidationJob();
+        tslValidationJob.setCheckLOTLSignature(properties.getProperty("lotl.checksignature").equalsIgnoreCase("true"));
+        tslValidationJob.setCheckTSLSignatures(properties.getProperty("tsl.checksignature").equalsIgnoreCase("true"));
+        tslValidationJob.setOjUrl(properties.getProperty("oj.url", null));
+        tslValidationJob.setLotlUrl(properties.getProperty("lotl.url", null));
+        tslValidationJob.setLotlCode(properties.getProperty("lotl.code", null));
+        tslValidationJob.setRepository(tslRepository);
+        tslValidationJob.setDataLoader(dataloader);
+        tslValidationJob.setDssKeyStore(keyStore);
+
+        tslValidationJob.initRepository();
+        //Load data
+        tslValidationJob.refresh();
     }
 
 }

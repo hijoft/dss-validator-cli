@@ -29,7 +29,8 @@ public enum CLIArgs {
     POLICY("p", "policy"),
     RFORMAT("rf", "rformat"),
     RDEST("rd", "rdest"),
-    DB("db","database")
+    DB("db","database"),
+    LOTL("l", "lotl"),
     ;
     
     private final String shortArg, longArg;

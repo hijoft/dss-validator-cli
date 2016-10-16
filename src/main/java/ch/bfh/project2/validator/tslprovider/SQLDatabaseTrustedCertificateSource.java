@@ -20,6 +20,7 @@ package ch.bfh.project2.validator.tslprovider;
 
 import ch.bfh.project2.validator.exception.InitializationException;
 import eu.europa.esig.dss.tsl.ServiceInfo;
+import eu.europa.esig.dss.tsl.TrustedListsCertificateSource;
 import eu.europa.esig.dss.x509.CertificateToken;
 import eu.europa.esig.dss.x509.CommonTrustedCertificateSource;
 import java.io.IOException;
@@ -36,7 +37,7 @@ import java.sql.Statement;
 import java.util.Properties;
 
 
-public class SQLDatabaseTrustedCertificateSource extends CommonTrustedCertificateSource {
+public class SQLDatabaseTrustedCertificateSource extends TrustedListsCertificateSource {
 
     //Regex for raw config options validation.
     private static final String NAMERGX = "[a-zA-Z0-9_]+";
