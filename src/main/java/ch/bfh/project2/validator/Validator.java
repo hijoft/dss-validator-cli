@@ -25,20 +25,23 @@ import eu.europa.esig.dss.DSSDocument;
 import eu.europa.esig.dss.DSSUtils;
 import eu.europa.esig.dss.FileDocument;
 import eu.europa.esig.dss.client.crl.OnlineCRLSource;
+import eu.europa.esig.dss.client.ocsp.OnlineOCSPSource;
 import eu.europa.esig.dss.tsl.ServiceInfo;
 import eu.europa.esig.dss.tsl.TrustedListsCertificateSource;
 import eu.europa.esig.dss.validation.CommonCertificateVerifier;
 import eu.europa.esig.dss.validation.SignedDocumentValidator;
-import eu.europa.esig.dss.validation.report.Reports;
+import eu.europa.esig.dss.validation.reports.Reports;
 import eu.europa.esig.dss.x509.CertificateToken;
 import eu.europa.esig.dss.x509.CommonTrustedCertificateSource;
 import eu.europa.esig.dss.x509.crl.CRLSource;
+import eu.europa.esig.dss.x509.ocsp.OCSPSource;
 import java.io.ByteArrayInputStream;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.InputStream;
+import java.io.UnsupportedEncodingException;
 import java.security.cert.CertificateException;
 import java.security.cert.CertificateFactory;
 import java.security.cert.X509Certificate;
@@ -207,20 +210,25 @@ public class Validator {
             //Load crl data from urls stored inside the certificates
             CRLSource crlSource = new OnlineCRLSource();
             verifier.setCrlSource(crlSource);
+            OCSPSource ocspSource = new OnlineOCSPSource();
+            verifier.setOcspSource(ocspSource);
 
             verifier.setTrustedCertSource(certSource);
             validator.setCertificateVerifier(verifier);
 
             Reports reports = validator.validateDocument(policyFile);
-
-            if (reportFormats.contains(REPORT_FORMAT_STANDARD)) {
-                saveReport(new ByteArrayInputStream(reports.getSimpleReport().toByteArray()), getReportSavePath(destinationPath, REPORT_FORMAT_STANDARD, policyFile.getName(), pdf.getName()));
-            }
-            if (reportFormats.contains(REPORT_FORMAT_DETAIL)) {
-                saveReport(new ByteArrayInputStream(reports.getDetailedReport().toByteArray()), getReportSavePath(destinationPath, REPORT_FORMAT_DETAIL, policyFile.getName(), pdf.getName()));
-            }
-            if (reportFormats.contains(REPORT_FORMAT_DIAGNOSTIC)) {
-                saveReport(new ByteArrayInputStream(reports.getDiagnosticData().toByteArray()), getReportSavePath(destinationPath, REPORT_FORMAT_DIAGNOSTIC, policyFile.getName(), pdf.getName()));
+            try {
+                if (reportFormats.contains(REPORT_FORMAT_STANDARD)) {
+                    saveReport(new ByteArrayInputStream(reports.getXmlSimpleReport().getBytes("UTF-8")), getReportSavePath(destinationPath, REPORT_FORMAT_STANDARD, policyFile.getName(), pdf.getName()));
+                }
+                if (reportFormats.contains(REPORT_FORMAT_DETAIL)) {
+                    saveReport(new ByteArrayInputStream(reports.getXmlDetailedReport().getBytes("UTF-8")), getReportSavePath(destinationPath, REPORT_FORMAT_DETAIL, policyFile.getName(), pdf.getName()));
+                }
+                if (reportFormats.contains(REPORT_FORMAT_DIAGNOSTIC)) {
+                    saveReport(new ByteArrayInputStream(reports.getXmlDiagnosticData().getBytes("UTF-8")), getReportSavePath(destinationPath, REPORT_FORMAT_DIAGNOSTIC, policyFile.getName(), pdf.getName()));
+                }
+            } catch (UnsupportedEncodingException ex) {
+                    LOGGER.log(Level.SEVERE, null, ex);
             }
         }
         LOGGER.log(Level.INFO, "Finished");
