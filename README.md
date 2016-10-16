@@ -34,6 +34,8 @@ Arguments:
 
 -h,--help Shows this help dialog
 
+-l,--lotl Certificates are loaded from the LOTL specified in tsp.config.properties
+
 -p,--policy <XML-FILE> DSS Validation Policy (XML Format). If not defined, the default policy is used.
 
 -rd,--rdest <DIRECTORY> Destination for output file. If not defined, the output directory containing the PDF file is used.
