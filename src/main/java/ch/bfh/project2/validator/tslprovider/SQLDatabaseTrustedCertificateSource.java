@@ -20,7 +20,7 @@ package ch.bfh.project2.validator.tslprovider;
 
 import ch.bfh.project2.validator.exception.InitializationException;
 import eu.europa.esig.dss.tsl.ServiceInfo;
-import eu.europa.esig.dss.tsl.TrustedListsCertificateSource;
+import eu.europa.esig.dss.x509.CertificateSourceType;
 import eu.europa.esig.dss.x509.CertificateToken;
 import eu.europa.esig.dss.x509.CommonTrustedCertificateSource;
 import java.io.IOException;
@@ -37,7 +37,7 @@ import java.sql.Statement;
 import java.util.Properties;
 
 
-public class SQLDatabaseTrustedCertificateSource extends TrustedListsCertificateSource {
+public class SQLDatabaseTrustedCertificateSource extends CommonTrustedCertificateSource {
 
     //Regex for raw config options validation.
     private static final String NAMERGX = "[a-zA-Z0-9_]+";
@@ -108,6 +108,11 @@ public class SQLDatabaseTrustedCertificateSource extends TrustedListsCertificate
                 throw new InitializationException(ex.getMessage(), ex);
             }
         }
+    }
+
+    @Override
+    protected CertificateSourceType getCertificateSourceType() {
+        return CertificateSourceType.TRUSTED_STORE;
     }
 
     private void verifiyProperties(String dbName, String tableName, String blobCol) throws InitializationException {

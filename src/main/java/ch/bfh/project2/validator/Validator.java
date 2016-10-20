@@ -89,7 +89,7 @@ public class Validator {
         options.addOption(Option.builder(CLIArgs.RFORMAT.shortArg()).longOpt(CLIArgs.RFORMAT.longArg()).argName("ATTRIBUTE").hasArg().desc("Report format. Multiple formats must be provided comma-separated without whitespace. Possible attributes: " + REPORT_FORMAT_STANDARD + " (default), " + REPORT_FORMAT_DETAIL + ", " + REPORT_FORMAT_DIAGNOSTIC + ".").build());
         options.addOption(Option.builder(CLIArgs.RDEST.shortArg()).longOpt(CLIArgs.RDEST.longArg()).argName("DIRECTORY").hasArg().desc("Destination for output file. If not defined, the output directory containing the PDF file is used.").build());
         options.addOption(Option.builder(CLIArgs.DB.shortArg()).longOpt(CLIArgs.DB.longArg()).desc("Certificates are loaded from the database specified in db.config.properties").build());
-        options.addOption(Option.builder(CLIArgs.LOTL.shortArg()).longOpt(CLIArgs.LOTL.longArg()).desc("Certificates are loaded from the LOTL specified in tsp.config.properties").build());
+        options.addOption(Option.builder(CLIArgs.LOTL.shortArg()).longOpt(CLIArgs.LOTL.longArg()).desc("Certificates are loaded from the LOTL specified in tsp.config.properties. IF THIS OPTION IS ACTIVE, THE FOLLOWING OPTIONS ARE IGNORED: --" + CLIArgs.CERTS.longArg() + " and --" + CLIArgs.DB.longArg()).build());
 
         CommandLine cliCmd;
         try {
@@ -176,13 +176,17 @@ public class Validator {
             reportFormats.add(REPORT_FORMAT_STANDARD);
         }
 
-        TrustedListsCertificateSource certSource = null;
+        CommonTrustedCertificateSource certSource = null;
         if (cliCmd.hasOption(CLIArgs.DB.shortArg())) {
-            try {
-                certSource = new SQLDatabaseTrustedCertificateSource();
-            } catch (InitializationException ex) {
-                LOGGER.error(null, ex);
-                return;
+            if(!cliCmd.hasOption(CLIArgs.LOTL.shortArg())){
+                try {
+                    certSource = new SQLDatabaseTrustedCertificateSource();
+                } catch (InitializationException ex) {
+                    LOGGER.error(null, ex);
+                    return;
+                }
+            }else{
+                LOGGER.warn("Option --" + CLIArgs.LOTL.longArg()+ " is active, the option --" + CLIArgs.DB.longArg() + " is ignored");
             }
         }
 
@@ -190,19 +194,23 @@ public class Validator {
             certSource = new TrustedListsCertificateSource();
         }
         //Check certs directory
-        if (cliCmd.hasOption(CLIArgs.CERTS.shortArg())) {
-            File certDirectory = new File(handleHomePath(cliCmd.getOptionValue(CLIArgs.CERTS.shortArg())));
-            if (!certDirectory.exists() || !certDirectory.isDirectory()) {
-                LOGGER.warn("{}: No valid directory given as argument: {}", new Object[]{CLIArgs.CERTS.toString(), certDirectory.getPath()});
-                return;
-            }
-            //Load all certificates in folder to trusted cert store
-            try {
-                CertificateFactory cf = CertificateFactory.getInstance("X.509");
-                buildTrustList(certSource, cf, certDirectory);
-            } catch (CertificateException ce) {
-                LOGGER.error(ce.getMessage());
-                return;
+        if (cliCmd.hasOption(CLIArgs.CERTS.shortArg())) {            
+            if(!cliCmd.hasOption(CLIArgs.LOTL.shortArg())){
+                File certDirectory = new File(handleHomePath(cliCmd.getOptionValue(CLIArgs.CERTS.shortArg())));
+                if (!certDirectory.exists() || !certDirectory.isDirectory()) {
+                    LOGGER.warn("{}: No valid directory given as argument: {}", new Object[]{CLIArgs.CERTS.toString(), certDirectory.getPath()});
+                    return;
+                }
+                //Load all certificates in folder to trusted cert store
+                try {
+                    CertificateFactory cf = CertificateFactory.getInstance("X.509");
+                    buildTrustList(certSource, cf, certDirectory);
+                } catch (CertificateException ce) {
+                    LOGGER.error(ce.getMessage());
+                    return;
+                }
+            }else{
+                LOGGER.warn("Option --" + CLIArgs.LOTL.longArg() + "  is active, the option --" + CLIArgs.CERTS.longArg() + " is ignored!");
             }
         }
         
@@ -210,9 +218,12 @@ public class Validator {
         if (cliCmd.hasOption(CLIArgs.LOTL.shortArg())) {
             try {
                 //Load certificates from TSL
-                loadFromTSL(certSource);
+                loadFromTSL((TrustedListsCertificateSource)certSource);
             } catch (IOException ex) {
                 LOGGER.error("Could not load tsp.config.properties: {}", ex.getMessage());
+                return;
+            }catch (ClassCastException ex){
+                LOGGER.error("Internal error", ex);
                 return;
             }
         }
