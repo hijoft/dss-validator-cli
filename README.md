@@ -34,7 +34,7 @@ Arguments:
 
 -h,--help Shows this help dialog
 
--l,--lotl Certificates are loaded from the LOTL specified in tsp.config.properties
+-l,--lotl Certificates are loaded from the LOTL specified in tsp.config.properties. IF THIS OPTION IS ACTIVE, THE FOLLOWING OPTIONS ARE IGNORED: --certs and --database
 
 -p,--policy <XML-FILE> DSS Validation Policy (XML Format). If not defined, the default policy is used.
 
